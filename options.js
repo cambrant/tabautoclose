@@ -1,8 +1,12 @@
 /* global browser */
 
-const saveFolder = document.getElementById("saveFolder");
-const statusEl = document.getElementById("status");
-const importFileEl = document.getElementById("importfile");
+const IS_NODE_TEST =
+  typeof module !== "undefined" &&
+  typeof module.exports !== "undefined";
+
+const saveFolder = IS_NODE_TEST ? null : document.getElementById("saveFolder");
+const statusEl = IS_NODE_TEST ? null : document.getElementById("status");
+const importFileEl = IS_NODE_TEST ? null : document.getElementById("importfile");
 let statusTimeoutId = null;
 const OPTION_IDS = [
   "closeThreshold",
@@ -740,4 +744,16 @@ async function onLoad() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", onLoad);
+if (IS_NODE_TEST) {
+  module.exports = {
+    normalizeComment,
+    parsePairedRuleLines,
+    parseCloseRuleRows,
+    parseIgnoreRuleRows,
+    serializeCloseRuleRows,
+    serializeIgnoreRuleRows,
+    getElementValue,
+  };
+} else {
+  document.addEventListener("DOMContentLoaded", onLoad);
+}

@@ -1,5 +1,9 @@
 /* global browser */
 
+const IS_NODE_TEST =
+  typeof module !== "undefined" &&
+  typeof module.exports !== "undefined";
+
 let closeThreshold = 7;
 let saveFolder = "unfiled_____";
 let cleanupIntervalIds = [];
@@ -1024,16 +1028,89 @@ function registerTabEventListeners() {
   });
 }
 
-(async () => {
-  await onStorageChanged();
-  browser.runtime.onInstalled.addListener(onInstalled);
-  browser.browserAction.onClicked.addListener(onBAClicked);
-  browser.storage.onChanged.addListener(() => {
-    onStorageChanged();
-  });
-  browser.runtime.onMessage.addListener((data) => {
-    if (data.cmd === "storageChanged") {
+function resetRuntimeStateForTests() {
+  closeThreshold = 7;
+  saveFolder = "unfiled_____";
+  cleanupIntervalIds = [];
+  reconciliationIntervalId = null;
+  autostart = false;
+  closeAllMatching = false;
+  closeActive = false;
+  closeAudible = false;
+  closePinned = false;
+  debug = false;
+  tabStates.clear();
+  containerNameCache.clear();
+  parsedIgnoreRules = [];
+  parsedIntervalRules = [];
+  runtimeStateSeeded = false;
+  tabEventListenersRegistered = false;
+  runtimeStarted = false;
+}
+
+function configureRuntimeForTests(config = {}) {
+  if (typeof config.closeThreshold !== "undefined") {
+    closeThreshold = config.closeThreshold;
+  }
+  if (typeof config.saveFolder !== "undefined") {
+    saveFolder = config.saveFolder;
+  }
+  if (typeof config.autostart !== "undefined") {
+    autostart = config.autostart;
+  }
+  if (typeof config.closeAllMatching !== "undefined") {
+    closeAllMatching = config.closeAllMatching;
+  }
+  if (typeof config.closeActive !== "undefined") {
+    closeActive = config.closeActive;
+  }
+  if (typeof config.closeAudible !== "undefined") {
+    closeAudible = config.closeAudible;
+  }
+  if (typeof config.closePinned !== "undefined") {
+    closePinned = config.closePinned;
+  }
+  if (typeof config.debug !== "undefined") {
+    debug = config.debug;
+  }
+  if (typeof config.runtimeStateSeeded !== "undefined") {
+    runtimeStateSeeded = config.runtimeStateSeeded;
+  }
+  if (typeof config.parsedIgnoreRules !== "undefined") {
+    parsedIgnoreRules = config.parsedIgnoreRules;
+  }
+  if (typeof config.parsedIntervalRules !== "undefined") {
+    parsedIntervalRules = config.parsedIntervalRules;
+  }
+}
+
+if (IS_NODE_TEST) {
+  module.exports = {
+    coerceStoredValue,
+    parseIgnoreRules,
+    parseIntervalRules,
+    buildTabState,
+    mergeTabState,
+    upsertTabState,
+    markTabActive,
+    matchesRuleContainer,
+    tabCleanUp,
+    resetRuntimeStateForTests,
+    configureRuntimeForTests,
+    getTrackedTabStatesForTests: () => new Map(tabStates),
+  };
+} else {
+  (async () => {
+    await onStorageChanged();
+    browser.runtime.onInstalled.addListener(onInstalled);
+    browser.browserAction.onClicked.addListener(onBAClicked);
+    browser.storage.onChanged.addListener(() => {
       onStorageChanged();
-    }
-  });
-})();
+    });
+    browser.runtime.onMessage.addListener((data) => {
+      if (data.cmd === "storageChanged") {
+        onStorageChanged();
+      }
+    });
+  })();
+}
