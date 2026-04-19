@@ -1,4 +1,4 @@
-# autotabclose
+# Tab AutoClose
 
 This extension is based on auto-close-tabs, which is part of the following
 project: https://github.com/igorlogius/webextensions/. The original extension is

@@ -1,6 +1,6 @@
 {
   "author": "cambrant",
-  "homepage_url": "https://github.com/cambrant/autoclosetabs",
+  "homepage_url": "https://github.com/cambrant/tabautoclose",
   "browser_specific_settings": {
     "gecko": {
       "data_collection_permissions": {
