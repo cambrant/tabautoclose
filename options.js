@@ -1,6 +1,22 @@
 /* global browser */
 
 const saveFolder = document.getElementById("saveFolder");
+const statusEl = document.getElementById("status");
+const importFileEl = document.getElementById("importfile");
+let statusTimeoutId = null;
+const OPTION_IDS = [
+  "closeThreshold",
+  "saveFolder",
+  "closeAllMatching",
+  "closeActive",
+  "closeAudible",
+  "closePinned",
+  "debug",
+  "intervalrules_url_regex",
+  "intervalrules_time_ms_and_container_regex",
+  "ignorerules_url_regex",
+  "ignorerules_container_regex",
+];
 
 function recGetFolders(node, depth = 0) {
   let out = new Map();
@@ -29,12 +45,8 @@ async function initSaveFolderSelect() {
   }
 }
 
-function onChange(evt) {
-  let id = evt.target.id;
-  let el = document.getElementById(id);
-
+function getElementValue(el) {
   let value = el.type === "checkbox" ? el.checked : el.value;
-  let obj = {};
 
   if (el.type === "number") {
     try {
@@ -50,8 +62,109 @@ function onChange(evt) {
     }
   }
 
+  return value;
+}
+
+function showStatus(message, isError = false) {
+  if (statusTimeoutId !== null) {
+    clearTimeout(statusTimeoutId);
+    statusTimeoutId = null;
+  }
+
+  statusEl.textContent = message;
+  statusEl.style.color = isError ? "darkred" : "inherit";
+
+  if (message !== "" && !isError) {
+    statusTimeoutId = setTimeout(() => {
+      statusEl.textContent = "";
+      statusEl.style.color = "inherit";
+      statusTimeoutId = null;
+    }, 10000);
+  }
+}
+
+function collectOptionsFromForm() {
+  const data = {};
+  OPTION_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      data[id] = getElementValue(el);
+    }
+  });
+
+  return data;
+}
+
+async function saveOptions() {
+  await browser.storage.local.set(collectOptionsFromForm());
+  await browser.runtime.sendMessage({ cmd: "storageChanged" });
+}
+
+async function exportOptions() {
+  const config = await browser.storage.local.get(null);
+  const blob = new Blob([JSON.stringify(config, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+  anchor.href = url;
+  anchor.download = `tabautoclose-config-${timestamp}.json`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function applyOptionsToForm(config) {
+  OPTION_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || typeof config[id] === "undefined") {
+      return;
+    }
+
+    if (el.type === "checkbox") {
+      el.checked = config[id];
+    } else {
+      el.value = config[id];
+    }
+  });
+}
+
+async function loadOptionsIntoForm() {
+  const config = await browser.storage.local.get(OPTION_IDS);
+  applyOptionsToForm(config);
+}
+
+async function importOptions(file) {
+  const text = await file.text();
+  const config = JSON.parse(text);
+
+  if (config === null || Array.isArray(config) || typeof config !== "object") {
+    throw new Error("Imported data must be a JSON object.");
+  }
+
+  await browser.storage.local.clear();
+  await browser.storage.local.set(config);
+  await browser.runtime.sendMessage({ cmd: "storageChanged" });
+  await loadOptionsIntoForm();
+}
+
+function onChange(evt) {
+  let id = evt.target.id;
+  let el = document.getElementById(id);
+  let obj = {};
+
+  const value = getElementValue(el);
   obj[id] = value;
-  browser.storage.local.set(obj).catch(console.error);
+  browser.storage.local
+    .set(obj)
+    .then(() => showStatus(""))
+    .catch((e) => {
+      console.error(e);
+      showStatus("Failed to save option.", true);
+    });
 }
 
 async function onLoad() {
@@ -66,66 +179,59 @@ async function onLoad() {
     document.getElementById("closeActiveLabel").hidden = false;
   }
 
-  [
-    "closeThreshold",
-    "saveFolder",
-    "closeAllMatching",
-    "intervalrules_url_regex",
-    "intervalrules_time_ms_and_container_regex",
-    "ignorerules_url_regex",
-    "ignorerules_container_regex",
-  ].map(async (id) => {
-    try {
-      const obj = await browser.storage.local.get(id);
-      let el = document.getElementById(id);
-      let val = obj[id];
+  try {
+    await loadOptionsIntoForm();
+  } catch (e) {
+    console.error(e);
+  }
 
-      if (typeof val !== "undefined") {
-        if (el.type === "checkbox") {
-          el.checked = val;
-        } else {
-          el.value = val;
-        }
-      }
-    } catch (e) {
-      console.error(e);
+  OPTION_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener("change", onChange);
     }
   });
 
-  document.getElementById("savebtn").addEventListener("click", () => {
-    [
-      "closeThreshold",
-      "saveFolder",
-      "closeAllMatching",
-      "intervalrules_url_regex",
-      "intervalrules_time_ms_and_container_regex",
-      "ignorerules_url_regex",
-      "ignorerules_container_regex",
-    ].forEach((id) => {
-      let el = document.getElementById(id);
+  document.getElementById("savebtn").addEventListener("click", async () => {
+    try {
+      await saveOptions();
+      showStatus("Options saved.");
+    } catch (e) {
+      console.error(e);
+      showStatus("Failed to save options.", true);
+    }
+  });
 
-      let value = el.type === "checkbox" ? el.checked : el.value;
-      let obj = {};
+  document.getElementById("exportbtn").addEventListener("click", async () => {
+    try {
+      await saveOptions();
+      await exportOptions();
+      showStatus("Configuration exported.");
+    } catch (e) {
+      console.error(e);
+      showStatus("Failed to export configuration.", true);
+    }
+  });
 
-      if (el.type === "number") {
-        try {
-          value = parseInt(value);
-          if (isNaN(value)) {
-            value = el.min;
-          }
-          if (value < el.min) {
-            value = el.min;
-          }
-        } catch (e) {
-          value = el.min;
-        }
-      }
+  document.getElementById("importbtn").addEventListener("click", () => {
+    importFileEl.click();
+  });
 
-      obj[id] = value;
-      browser.storage.local.set(obj).catch(console.error);
-    });
+  importFileEl.addEventListener("change", async (evt) => {
+    const [file] = evt.target.files;
+    if (!file) {
+      return;
+    }
 
-    browser.runtime.sendMessage({ cmd: "storageChanged" });
+    try {
+      await importOptions(file);
+      showStatus("Configuration imported.");
+    } catch (e) {
+      console.error(e);
+      showStatus("Failed to import configuration.", true);
+    } finally {
+      importFileEl.value = "";
+    }
   });
 }
 

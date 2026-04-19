@@ -6,6 +6,10 @@ let setIntervalIds = [];
 let autostart = false;
 let ignoreRules = [];
 let closeAllMatching = false;
+let closeActive = false;
+let closeAudible = false;
+let closePinned = false;
+let debug = false;
 
 // Track when each tab was last activated (switched to) ourselves.
 // This is the primary idle-time source because:
@@ -14,10 +18,20 @@ let closeAllMatching = false;
 // - Chrome/Edge don't have tab.lastAccessed at all.
 const tabActivatedAt = new Map();
 
-const asyncFilter = async (arr, predicate) => {
-  const results = await Promise.all(arr.map(predicate));
-  return arr.filter((_v, index) => results[index]);
-};
+function debugLog(message, details) {
+  if (!debug) {
+    return;
+  }
+
+  const resolvedDetails =
+    typeof details === "function" ? details() : details;
+
+  if (typeof details === "undefined") {
+    console.debug("[TabAutoClose]", message);
+  } else {
+    console.debug("[TabAutoClose]", message, resolvedDetails);
+  }
+}
 
 function updateBadge(text, color) {
   browser.browserAction.setBadgeText({
@@ -55,8 +69,8 @@ async function rebuildIgnoreRules(
 
   for (let i = 0; i < container_regexs.length && i < url_regexs.length; i++) {
     try {
-      left = container_regexs[i].trim();
-      right = url_regexs[i].trim();
+      const left = container_regexs[i].trim();
+      const right = url_regexs[i].trim();
 
       if (!left.startsWith("#") && !right.startsWith("#")) {
         const containerNameMatcher = left === "" ? null : new RegExp(left);
@@ -96,7 +110,7 @@ async function rebuildIntervalHandlers(
         right !== "" &&
         left !== ""
       ) {
-        left_parts = left.split(",");
+        const left_parts = left.split(",");
         if (left_parts.length < 2) {
           continue;
         }
@@ -139,85 +153,153 @@ async function getContainerNameFromCookieStoreId(csid) {
   return null;
 }
 
+async function getCachedContainerName(containerNameCache, cookieStoreId) {
+  if (!containerNameCache.has(cookieStoreId)) {
+    containerNameCache.set(
+      cookieStoreId,
+      await getContainerNameFromCookieStoreId(cookieStoreId),
+    );
+  }
+  return containerNameCache.get(cookieStoreId);
+}
+
 async function tabCleanUp(input) {
   if (!autostart) {
     return;
   }
 
   // to check idle time
-  const epoch_now = new Date().getTime();
+  const epoch_now = Date.now();
 
   const query = {
     // care only about normal windows
     windowType: "normal",
   };
-  if (!closeAllMatching) {
-    // default: skip active, audible, and pinned tabs
+
+  const effectiveCloseActive = closeAllMatching || closeActive;
+  const effectiveCloseAudible = closeAllMatching || closeAudible;
+  const effectiveClosePinned = closeAllMatching || closePinned;
+
+  if (!effectiveCloseActive) {
     query.active = false;
+  }
+  if (!effectiveCloseAudible) {
     query.audible = false;
+  }
+  if (!effectiveClosePinned) {
     query.pinned = false;
   }
 
-  let all_tabs = (
-    await asyncFilter(
-      await browser.tabs.query(query),
-      async (t) => {
-        // filter ignored tabs
-        const cn = await getContainerNameFromCookieStoreId(t.cookieStoreId);
-        for (const el of ignoreRules) {
-          if (el.containerNameMatcher === null) {
-            if (cn === null) {
-              if (el.urlMatcher.test(t.url)) {
-                return false;
-              }
-            }
-            continue;
+  debugLog("Starting tab cleanup", () => ({
+    minIdleTimeMilliSecs: input.minIdleTimeMilliSecs,
+    closeThreshold,
+    effectiveCloseActive,
+    effectiveCloseAudible,
+    effectiveClosePinned,
+    query,
+  }));
+
+  const containerNameCache = new Map();
+  const tabCandidates = await Promise.all(
+    (await browser.tabs.query(query)).map(async (tab) => {
+      const containerName = await getCachedContainerName(
+        containerNameCache,
+        tab.cookieStoreId,
+      );
+
+      for (const el of ignoreRules) {
+        if (el.containerNameMatcher === null) {
+          if (containerName === null && el.urlMatcher.test(tab.url)) {
+            debugLog("Skipping ignored tab", {
+              id: tab.id,
+              url: tab.url,
+              container: containerName,
+            });
+            return null;
           }
-          if (cn === null) {
-            continue;
-          }
-          // both are not null, so lets check
-          if (el.containerNameMatcher.test(cn)) {
-            if (el.urlMatcher.test(t.url)) {
-              return false;
-            }
-          }
+          continue;
         }
-        return true;
-      },
-    )
-  ).sort((a, b) => {
-    a.lastAccessed - b.lastAccessed;
+        if (containerName === null) {
+          continue;
+        }
+        if (el.containerNameMatcher.test(containerName) &&
+            el.urlMatcher.test(tab.url)) {
+          debugLog("Skipping ignored tab", {
+            id: tab.id,
+            url: tab.url,
+            container: containerName,
+          });
+          return null;
+        }
+      }
+
+      return {
+        tab,
+        containerName,
+        lastActive: tabActivatedAt.get(tab.id) || tab.lastAccessed || 0,
+      };
+    }),
+  );
+
+  let all_tabs = tabCandidates.filter((candidate) => candidate !== null).sort((a, b) => {
+    return a.lastActive - b.lastActive;
   });
 
-  //console.debug(all_tabs.map( t => t.cookieStoreId + "_" + t.url ));
+  debugLog("Tabs eligible after initial filtering", () => ({
+    count: all_tabs.length,
+    tabs: all_tabs.map(({ tab }) => ({
+      id: tab.id,
+      url: tab.url,
+      active: tab.active,
+      audible: tab.audible,
+      pinned: tab.pinned,
+    })),
+  }));
 
   let max_nb_of_tabs_to_close = all_tabs.length - closeThreshold;
 
   if (max_nb_of_tabs_to_close < 1) {
+    debugLog("Nothing to close", () => ({
+      eligibleTabs: all_tabs.length,
+      closeThreshold,
+    }));
     return;
   }
 
-  for (const t of all_tabs) {
+  for (const candidate of all_tabs) {
     // stop when we reach the closeThreshold
     if (max_nb_of_tabs_to_close < 1) {
       continue;
     }
 
-    const cn = await getContainerNameFromCookieStoreId(t.cookieStoreId);
+    const { tab, containerName, lastActive } = candidate;
     // check the container
     if (input.containerNameMatcher !== null) {
-      if (cn !== null) {
-        if (!input.containerNameMatcher.test(cn)) {
+      if (containerName !== null) {
+        if (!input.containerNameMatcher.test(containerName)) {
+          debugLog("Skipping tab due to container mismatch", {
+            id: tab.id,
+            url: tab.url,
+            container: containerName,
+          });
           continue;
         }
       } else {
         // cn := null
+        debugLog("Skipping tab without container for container rule", {
+          id: tab.id,
+          url: tab.url,
+        });
         continue;
       }
     } else {
       // containerNameMatcher === null
-      if (cn !== null) {
+      if (containerName !== null) {
+        debugLog("Skipping container tab for non-container rule", {
+          id: tab.id,
+          url: tab.url,
+          container: containerName,
+        });
         continue;
       }
       // cn === containerNameMatcher
@@ -225,7 +307,8 @@ async function tabCleanUp(input) {
 
     // check the URL
     if (input.urlMatcher !== null) {
-      if (!input.urlMatcher.test(t.url)) {
+      if (!input.urlMatcher.test(tab.url)) {
+        debugLog("Skipping tab due to URL mismatch", { id: tab.id, url: tab.url });
         continue;
       }
     }
@@ -233,17 +316,22 @@ async function tabCleanUp(input) {
     // check the idle aka. last accessed time of the tab
     // Use our own tracked activation time as primary source (cross-browser).
     // Fall back to tab.lastAccessed (Firefox-only) if we don't have data yet.
-    const lastActive = tabActivatedAt.get(t.id) || t.lastAccessed || epoch_now;
     const delta = epoch_now - lastActive;
     if (delta < input.minIdleTimeMilliSecs) {
+      debugLog("Skipping tab due to idle time", {
+        id: tab.id,
+        url: tab.url,
+        idleMs: delta,
+        requiredIdleMs: input.minIdleTimeMilliSecs,
+      });
       continue;
     }
 
     try {
       if (typeof saveFolder === "string" && saveFolder !== "") {
         let createdetails = {
-          title: t.title,
-          url: t.url,
+          title: tab.title,
+          url: tab.url,
           parentId: saveFolder,
         };
         browser.bookmarks.create(createdetails);
@@ -251,7 +339,17 @@ async function tabCleanUp(input) {
     } catch (e) {
       console.error(e);
     }
-    await browser.tabs.remove(t.id);
+    debugLog("Closing tab", {
+      id: tab.id,
+      url: tab.url,
+      idleMs: delta,
+    });
+    await browser.tabs.remove(tab.id);
+    debugLog("Closed tab successfully", {
+      id: tab.id,
+      url: tab.url,
+      idleMs: delta,
+    });
     max_nb_of_tabs_to_close--;
   }
 }
@@ -270,6 +368,21 @@ async function onStorageChanged() {
     closeThreshold,
   );
   closeAllMatching = await getFromStorage("boolean", "closeAllMatching", false);
+  closeActive = await getFromStorage("boolean", "closeActive", false);
+  closeAudible = await getFromStorage("boolean", "closeAudible", false);
+  closePinned = await getFromStorage("boolean", "closePinned", false);
+  debug = await getFromStorage("boolean", "debug", false);
+
+  debugLog("Storage changed", () => ({
+    autostart,
+    closeThreshold,
+    closeAllMatching,
+    closeActive,
+    closeAudible,
+    closePinned,
+    debug,
+    saveFolder,
+  }));
 
   if (autostart) {
     updateBadge("on", "green");

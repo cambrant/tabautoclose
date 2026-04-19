@@ -15,7 +15,37 @@
         margin-left: 40%;
         width: 20%;
         margin-top: 5px;
-        margin-bottom: 5px;
+        margin-bottom: 2px;
+      }
+      #exportbtn {
+        text-align: center;
+        margin-left: 40%;
+        width: 20%;
+        margin-top: 5px;
+        margin-bottom: 2px;
+      }
+      #importbtn {
+        text-align: center;
+        margin-left: 40%;
+        width: 20%;
+        margin-top: 5px;
+        margin-bottom: 2px;
+      }
+      #actions {
+        margin-top: 8px;
+        text-align: center;
+      }
+      #actions button {
+        margin: 0 4px;
+        min-width: 8rem;
+      }
+      #importfile {
+        display: none;
+      }
+      #status {
+        min-height: 1.2em;
+        margin-top: 8px;
+        text-align: center;
       }
     </style>
   </head>
@@ -55,16 +85,16 @@
     <fieldset>
       <legend>
         <b>Close Rules </b>
-        <abbr title="Format: CloseTime(MS), Container(RE) | URL(RE)">(?)</abbr>
+        <abbr title="Format: CloseTime (ms), Container (regex) | URL (regex)">(?)</abbr>
       </legend>
       <textarea
         id="intervalrules_time_ms_and_container_regex"
-        style="resize: none; float: left; width: 50%; height: 15em"
+        style="resize: none; float: left; width: 50%; height: 12em"
         autocomplete="off"
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        placeholder="# CloseTime(MS),'Container(RE)
+        placeholder="# CloseTime (ms), Container (regex)
 # Examples:
 # 10s, no container
 10000,
@@ -76,12 +106,12 @@
       ></textarea>
       <textarea
         id="intervalrules_url_regex"
-        style="resize: none; width: 50%; height: 15em"
+        style="resize: none; width: 50%; height: 12em"
         autocomplete="off"
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        placeholder="# 'URL(RE)'
+        placeholder="# 'URL (regex)'
 # Examples:
 # any http/s URL
 ^https?:\/\/.*
@@ -97,16 +127,16 @@
       <legend>
         <b>Ignore Rules</b>
 
-        <abbr title="Format: Container(RE) | URL(RE)">(?)</abbr>
+        <abbr title="Format: Container (regex) | URL (regex)">(?)</abbr>
       </legend>
       <textarea
         id="ignorerules_container_regex"
-        style="float: left; resize: none; width: 50%; height: 15em"
+        style="float: left; resize: none; width: 50%; height: 12em"
         autocomplete="off"
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        placeholder="# Enter 'Container(RE)' here
+        placeholder="# Enter 'Container (regex)' here
 # Examples:
 #                  := no container
 #  .*              := any container
@@ -116,12 +146,12 @@
       ></textarea>
       <textarea
         id="ignorerules_url_regex"
-        style="resize: none; width: 50%; height: 15em"
+        style="resize: none; width: 50%; height: 12em"
         autocomplete="off"
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        placeholder="# Enter 'URL(RE)' here
+        placeholder="# Enter 'URL (regex)' here
 # Examples:
 #  ^https?:\/\/    := any http/s URL
 #  ^about:newtab   := new tab page
@@ -130,7 +160,13 @@
 "
       ></textarea>
     </fieldset>
-    <button id="savebtn">Save</button>
+    <div id="actions">
+      <button id="savebtn" type="button">Save</button>
+      <button id="exportbtn" type="button">Export</button>
+      <button id="importbtn" type="button">Import</button>
+    </div>
+    <input id="importfile" type="file" accept="application/json,.json" />
+    <div id="status" aria-live="polite"></div>
     <script src="options.js"></script>
   </body>
 </html>

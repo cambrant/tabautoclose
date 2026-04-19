@@ -3,6 +3,7 @@
   "homepage_url": "https://github.com/cambrant/tabautoclose",
   "browser_specific_settings": {
     "gecko": {
+      "id": "tabautoclose@cambrant",
       "data_collection_permissions": {
         "required": ["none"]
       }
