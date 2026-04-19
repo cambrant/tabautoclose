@@ -85,23 +85,23 @@
     <fieldset>
       <legend>
         <b>Close Rules </b>
-        <abbr title="Format: CloseTime (ms), Container (regex) | URL (regex)">(?)</abbr>
+        <abbr title="Format: CloseTime (seconds), Container (regex) | URL (regex)">(?)</abbr>
       </legend>
       <textarea
-        id="intervalrules_time_ms_and_container_regex"
+        id="intervalrules_seconds_and_container_regex"
         style="resize: none; float: left; width: 50%; height: 12em"
         autocomplete="off"
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        placeholder="# CloseTime (ms), Container (regex)
+        placeholder="# CloseTime (seconds), Container (regex)
 # Examples:
 # 10s, no container
-10000,
+10,
 # 20s, any container
-20000,.*
+20,.*
 # 1s Tmp container
-1000,^Tmp$
+1,^Tmp$
 "
       ></textarea>
       <textarea

@@ -159,12 +159,12 @@ function parseIgnoreRules(
 }
 
 function parseIntervalRules(
-  intervalrulesStr_time_ms_and_container_regexs,
+  intervalrulesStr_seconds_and_container_regexs,
   intervalrulesStr_url_regexs,
 ) {
   const intervalRules = [];
   const timeMsAndContainerRegexes =
-    intervalrulesStr_time_ms_and_container_regexs.split("\n");
+    intervalrulesStr_seconds_and_container_regexs.split("\n");
   const urlRegexes = intervalrulesStr_url_regexs.split("\n");
 
   for (
@@ -187,10 +187,12 @@ function parseIntervalRules(
           continue;
         }
 
-        const minIdleTimeMilliSecs = parseInt(leftParts[0].trim());
-        if (Number.isNaN(minIdleTimeMilliSecs)) {
+        const minIdleTimeSecondsRaw = leftParts[0].trim();
+        if (!/^\d+$/.test(minIdleTimeSecondsRaw)) {
           continue;
         }
+
+        const minIdleTimeMilliSecs = parseInt(minIdleTimeSecondsRaw, 10) * 1000;
 
         left = leftParts.slice(1).join(",");
 
@@ -753,7 +755,7 @@ async function reloadParsedRulesFromStorage() {
     await getFromStorage("string", "ignorerules_url_regex", ""),
   );
   parsedIntervalRules = parseIntervalRules(
-    await getFromStorage("string", "intervalrules_time_ms_and_container_regex", ""),
+    await getFromStorage("string", "intervalrules_seconds_and_container_regex", ""),
     await getFromStorage("string", "intervalrules_url_regex", ""),
   );
   containerNameCache.clear();

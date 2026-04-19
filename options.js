@@ -13,7 +13,7 @@ const OPTION_IDS = [
   "closePinned",
   "debug",
   "intervalrules_url_regex",
-  "intervalrules_time_ms_and_container_regex",
+  "intervalrules_seconds_and_container_regex",
   "ignorerules_url_regex",
   "ignorerules_container_regex",
 ];
