@@ -174,11 +174,11 @@ function parseIgnoreRules(
         const containerNameMatcher = left === "" ? null : new RegExp(left);
         const urlMatcher = right === "" ? null : new RegExp(right);
 
-        if (urlMatcher !== null) {
+        if (containerNameMatcher !== null || urlMatcher !== null) {
           ignoreRules.push({
             containerNameMatcher,
             urlMatcher,
-            requiresContainerName: true,
+            requiresContainerName: containerNameMatcher !== null,
           });
         }
       }
@@ -507,11 +507,13 @@ async function isIgnoredTab(state) {
     const containerName = rule.requiresContainerName
       ? await ensureContainerNameForState(state)
       : null;
+    const matchesContainer =
+      !rule.requiresContainerName ||
+      matchesRuleContainer(rule, containerName);
+    const matchesUrl =
+      rule.urlMatcher === null || rule.urlMatcher.test(state.url);
 
-    if (
-      matchesRuleContainer(rule, containerName) &&
-      rule.urlMatcher.test(state.url)
-    ) {
+    if (matchesContainer && matchesUrl) {
       debugLog("Skipping ignored tab", {
         id: state.id,
         url: state.url,
@@ -819,6 +821,16 @@ async function onBAClicked() {
   await onStorageChanged();
 }
 
+function onInstalled(details) {
+  if (!details || details.reason !== "install") {
+    return;
+  }
+
+  browser.runtime.openOptionsPage().catch((e) => {
+    console.error(e);
+  });
+}
+
 async function onStorageChanged() {
   const settingsInitialized = await getSettingsInitializedFromStorage();
 
@@ -1014,6 +1026,7 @@ function registerTabEventListeners() {
 
 (async () => {
   await onStorageChanged();
+  browser.runtime.onInstalled.addListener(onInstalled);
   browser.browserAction.onClicked.addListener(onBAClicked);
   browser.storage.onChanged.addListener(() => {
     onStorageChanged();

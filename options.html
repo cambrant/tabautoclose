@@ -6,9 +6,92 @@
       body {
         padding: 3px;
       }
+      fieldset {
+        margin-bottom: 1em;
+      }
+      fieldset:last-of-type {
+        margin-bottom: 0;
+      }
       textarea {
         overflow-wrap: normal;
         overflow-x: scroll;
+      }
+      .storage-field {
+        display: none;
+      }
+      .rule-section {
+        margin-top: 8px;
+      }
+      .rule-section:first-of-type {
+        margin-top: 0;
+      }
+      .rule-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+      .rule-section-header b {
+        font-weight: 600;
+      }
+      .rule-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .rule-row {
+        display: grid;
+        column-gap: 1em;
+        row-gap: 4px;
+        align-items: center;
+      }
+      .rule-row-close {
+        grid-template-columns: minmax(7rem, 0.9fr) minmax(12rem, 1.4fr) minmax(12rem, 1.4fr) minmax(10rem, 1fr) auto;
+      }
+      .rule-card-close {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: 2em;
+        row-gap: 4px;
+        align-items: center;
+        border: 1px solid #bfbfbf;
+        border-radius: 6px;
+        padding: 8px;
+        background: #fafafa;
+      }
+      .rule-card-close-title {
+        grid-column: 1 / -1;
+        font-weight: 600;
+      }
+      .rule-row-close-field {
+        display: contents;
+      }
+      .rule-row-close-field label {
+        display: block;
+        font-weight: 400;
+      }
+      .rule-row-close-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .rule-row-ignore {
+        grid-template-columns: minmax(16rem, 1.6fr) minmax(10rem, 1fr) auto;
+      }
+      .rule-row input {
+        min-width: 0;
+        box-sizing: border-box;
+      }
+      .rule-btn {
+        text-align: center;
+        min-width: 2rem;
+        height: 2rem;
+        margin-top: 5px;
+      }
+      .legacy-note {
+        margin-top: 6px;
+        color: #6b4f00;
+        font-size: 0.9em;
       }
       #savebtn {
         text-align: center;
@@ -52,7 +135,7 @@
   <body>
     <fieldset>
       <legend>
-        <b>#Tabs to keep</b>
+        <b>Number of tabs to keep</b>
         <abbr
           title="tabs to keep open, last access time determines closing order"
           >(?)</abbr
@@ -85,80 +168,57 @@
     <fieldset>
       <legend>
         <b>Close Rules </b>
-        <abbr title="Format: CloseTime (seconds), Container (regex) | URL (regex)">(?)</abbr>
+        <abbr title="Stored as the existing paired rule strings; comments are preserved as comment lines.">(?)</abbr>
       </legend>
-      <textarea
-        id="intervalrules_seconds_and_container_regex"
-        style="resize: none; float: left; width: 50%; height: 12em"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        placeholder="# CloseTime (seconds), Container (regex)
-# Examples:
-# 10s, no container
-10,
-# 20s, any container
-20,.*
-# 1s Tmp container
-1,^Tmp$
-"
-      ></textarea>
-      <textarea
-        id="intervalrules_url_regex"
-        style="resize: none; width: 50%; height: 12em"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        placeholder="# 'URL (regex)'
-# Examples:
-# any http/s URL
-^https?:\/\/.*
-# new tab page
-^about:newtab
-# any about page
-^about:.*
-"
-      ></textarea>
+      <div class="rule-section">
+        <div id="close-rules" class="rule-grid"></div>
+        <div class="rule-section-header">
+          <button
+            id="addrule-close"
+            class="rule-btn"
+            type="button"
+            aria-label="Add close rule"
+          >+</button>
+        </div>
+      </div>
+      <textarea id="intervalrules_seconds_and_container_regex" class="storage-field"></textarea>
+      <textarea id="intervalrules_url_regex" class="storage-field"></textarea>
     </fieldset>
 
     <fieldset>
       <legend>
         <b>Ignore Rules</b>
-
-        <abbr title="Format: Container (regex) | URL (regex)">(?)</abbr>
+        <abbr title="Ignore by container or URL using the existing stored rule strings.">(?)</abbr>
       </legend>
-      <textarea
-        id="ignorerules_container_regex"
-        style="float: left; resize: none; width: 50%; height: 12em"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        placeholder="# Enter 'Container (regex)' here
-# Examples:
-#                  := no container
-#  .*              := any container
-#  ^Personal$      := exact Match with Personal container
-#  ^Tmp.*          := container starting with Tmp
-"
-      ></textarea>
-      <textarea
-        id="ignorerules_url_regex"
-        style="resize: none; width: 50%; height: 12em"
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck="false"
-        placeholder="# Enter 'URL (regex)' here
-# Examples:
-#  ^https?:\/\/    := any http/s URL
-#  ^about:newtab   := new tab page
-#  ^about:blank    := blank tab
-#  ^about:.*       := any about page
-"
-      ></textarea>
+      <div class="rule-section">
+        <b>Ignore Containers</b>
+        <div id="ignore-container-rules" class="rule-grid"></div>
+        <div class="rule-section-header">
+          <button
+            id="addrule-ignore-container"
+            class="rule-btn"
+            type="button"
+            aria-label="Add ignore container rule"
+          >+</button>
+        </div>
+      </div>
+      <div class="rule-section">
+        <b>Ignore URL</b>
+        <div id="ignore-url-rules" class="rule-grid"></div>
+        <div class="rule-section-header">
+          <button
+            id="addrule-ignore-url"
+            class="rule-btn"
+            type="button"
+            aria-label="Add ignore URL rule"
+          >+</button>
+        </div>
+      </div>
+      <div id="ignore-legacy-note" class="legacy-note" hidden>
+        Some existing combined ignore rules are preserved in storage and export but are not editable in this split view.
+      </div>
+      <textarea id="ignorerules_container_regex" class="storage-field"></textarea>
+      <textarea id="ignorerules_url_regex" class="storage-field"></textarea>
     </fieldset>
     <div id="actions">
       <button id="savebtn" type="button">Save</button>
