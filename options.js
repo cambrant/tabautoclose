@@ -17,6 +17,7 @@ const OPTION_IDS = [
   "ignorerules_url_regex",
   "ignorerules_container_regex",
 ];
+const SETTINGS_INITIALIZED_KEY = "settingsInitialized";
 
 function recGetFolders(node, depth = 0) {
   let out = new Map();
@@ -96,7 +97,10 @@ function collectOptionsFromForm() {
 }
 
 async function saveOptions() {
-  await browser.storage.local.set(collectOptionsFromForm());
+  await browser.storage.local.set({
+    ...collectOptionsFromForm(),
+    [SETTINGS_INITIALIZED_KEY]: true,
+  });
   await browser.runtime.sendMessage({ cmd: "storageChanged" });
 }
 
@@ -146,7 +150,10 @@ async function importOptions(file) {
   }
 
   await browser.storage.local.clear();
-  await browser.storage.local.set(config);
+  await browser.storage.local.set({
+    ...config,
+    [SETTINGS_INITIALIZED_KEY]: true,
+  });
   await browser.runtime.sendMessage({ cmd: "storageChanged" });
   await loadOptionsIntoForm();
 }
@@ -158,6 +165,7 @@ function onChange(evt) {
 
   const value = getElementValue(el);
   obj[id] = value;
+  obj[SETTINGS_INITIALIZED_KEY] = true;
   browser.storage.local
     .set(obj)
     .then(() => showStatus(""))

@@ -16,6 +16,21 @@ const containerNameCache = new Map();
 let parsedIgnoreRules = [];
 let parsedIntervalRules = [];
 let runtimeStateSeeded = false;
+let tabEventListenersRegistered = false;
+let runtimeStarted = false;
+const SETTINGS_INITIALIZED_FALLBACK_KEYS = [
+  "closeThreshold",
+  "saveFolder",
+  "closeAllMatching",
+  "closeActive",
+  "closeAudible",
+  "closePinned",
+  "debug",
+  "intervalrules_url_regex",
+  "intervalrules_seconds_and_container_regex",
+  "ignorerules_url_regex",
+  "ignorerules_container_regex",
+];
 
 const RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -104,6 +119,23 @@ async function getDebugFromStorage() {
   }
 
   return false;
+}
+
+async function getSettingsInitializedFromStorage() {
+  const tmp = await browser.storage.local.get("settingsInitialized");
+  const initialized = coerceStoredValue("boolean", tmp.settingsInitialized);
+
+  if (initialized === true) {
+    return true;
+  }
+
+  const legacyConfig = await browser.storage.local.get(
+    SETTINGS_INITIALIZED_FALLBACK_KEYS,
+  );
+
+  return SETTINGS_INITIALIZED_FALLBACK_KEYS.some(
+    (key) => typeof legacyConfig[key] !== "undefined",
+  );
 }
 
 function clearCleanupIntervals() {
@@ -437,6 +469,27 @@ async function seedRuntimeState() {
   }));
 }
 
+async function ensureRuntimeStarted() {
+  if (runtimeStarted) {
+    return;
+  }
+
+  try {
+    await seedRuntimeState();
+  } catch (e) {
+    runtimeStateSeeded = false;
+    console.error(e);
+    throw e;
+  }
+
+  if (!tabEventListenersRegistered) {
+    registerTabEventListeners();
+    tabEventListenersRegistered = true;
+  }
+
+  runtimeStarted = true;
+}
+
 function matchesRuleContainer(rule, containerName) {
   if (rule.containerNameMatcher === null) {
     return containerName === null;
@@ -767,6 +820,20 @@ async function onBAClicked() {
 }
 
 async function onStorageChanged() {
+  const settingsInitialized = await getSettingsInitializedFromStorage();
+
+  if (!settingsInitialized) {
+    runtimeStarted = false;
+    runtimeStateSeeded = false;
+    stopAllScheduledWork();
+    updateBadge("cfg", "gray");
+    return;
+  }
+
+  if (!runtimeStarted) {
+    await ensureRuntimeStarted();
+  }
+
   autostart = await getFromStorage("boolean", "autostart", false);
   saveFolder = await getFromStorage("string", "saveFolder", "unfiled_____");
   closeThreshold = await getFromStorage(
@@ -946,17 +1013,6 @@ function registerTabEventListeners() {
 }
 
 (async () => {
-  await reloadParsedRulesFromStorage();
-
-  try {
-    await seedRuntimeState();
-  } catch (e) {
-    runtimeStateSeeded = false;
-    console.error(e);
-  }
-
-  registerTabEventListeners();
-
   await onStorageChanged();
   browser.browserAction.onClicked.addListener(onBAClicked);
   browser.storage.onChanged.addListener(() => {
@@ -968,9 +1024,3 @@ function registerTabEventListeners() {
     }
   });
 })();
-
-browser.runtime.onInstalled.addListener(async (details) => {
-  if (details.reason === "install") {
-    browser.runtime.openOptionsPage();
-  }
-});
