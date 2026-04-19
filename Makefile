@@ -1,9 +1,9 @@
 .PHONY: build clean
 
-build: autotabclose.xpi
+build: tabautoclose.xpi
 
-autotabclose.xpi: manifest.json background.js options.html options.js icon.png
+tabautoclose.xpi: manifest.json background.js options.html options.js icon.png
 	zip -r $@ $^
 
 clean:
-	rm -f autotabclose.xpi
+	rm -f tabautoclose.xpi
